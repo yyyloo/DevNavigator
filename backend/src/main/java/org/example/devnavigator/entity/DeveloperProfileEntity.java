@@ -8,7 +8,7 @@ import java.math.BigDecimal;
 
 @Data
 @TableName("developer_profile")
-public class DeveloperProfile {
+public class DeveloperProfileEntity {
 
     @TableId(type = IdType.AUTO)
     private Long id;
@@ -16,14 +16,16 @@ public class DeveloperProfile {
     private String githubUsername;
 
     private BigDecimal talentRank = BigDecimal.ZERO;
-
     private String country;
-
     private BigDecimal countryConfidence;
 
-    private String field;
-
-    private BigDecimal fieldConfidence;
 
     private String blogUrl;
+    private String githubUrl;
+    private String avatarUrl;
+    private Integer followers=0;
+    private Integer commitCount=0;
+    private Integer repoCount=0;
+    private Integer starsCount=0;
+
 }

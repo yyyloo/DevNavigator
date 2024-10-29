@@ -1,7 +1,9 @@
 package org.example.devnavigator.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import org.example.devnavigator.entity.ProjectContributions;
+import org.apache.ibatis.annotations.Mapper;
+import org.example.devnavigator.entity.ProjectContributionsEntity;
 
-public interface ProjectContributionsMapper extends BaseMapper<ProjectContributions> {
+@Mapper
+public interface ProjectContributionsMapper extends BaseMapper<ProjectContributionsEntity> {
 }

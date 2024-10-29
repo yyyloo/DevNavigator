@@ -9,7 +9,7 @@ import java.math.BigDecimal;
 
 @Data
 @TableName("project_contributions")
-public class ProjectContributions {
+public class ProjectContributionsEntity {
 
     @TableId(type = IdType.AUTO)
     private Long id;
@@ -22,7 +22,6 @@ public class ProjectContributions {
 
     private BigDecimal contributionScore = BigDecimal.ZERO;
 
-    private Integer linesOfCode = 0;
 
-    private Integer commitsCount = 0;
+    private Integer commitCount = 0;
 }

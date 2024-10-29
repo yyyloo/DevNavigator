@@ -9,7 +9,7 @@ import java.math.BigDecimal;
 
 @Data
 @TableName("developer_network")
-public class DeveloperNetwork {
+public class DeveloperNetworkEntity {
 
     @TableId(type = IdType.AUTO)
     private Long id;
