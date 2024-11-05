@@ -31,6 +31,15 @@ public class MyMQConfig {
         return queue;
     }
 
+    @Bean
+    public Queue countryPredictQueue() {
+
+        Queue queue = new Queue("country.predict.queue", true, false, false);
+
+        return queue;
+    }
+
+
 
     /**
      * TopicExchange
@@ -49,6 +58,22 @@ public class MyMQConfig {
 
     }
 
+
+    @Bean
+    public Binding countryPredictBinding() {
+        /*
+         * String destination, 目的地（队列名或者交换机名字）
+         * DestinationType destinationType, 目的地类型（Queue、Exhcange）
+         * String exchange,
+         * String routingKey,
+         * Map<String, Object> arguments
+         * */
+        return new Binding("country.predict.queue",
+                Binding.DestinationType.QUEUE,
+                "dev_navigator-exchange",
+                "predict.country.key",
+                null);
+    }
 
     @Bean
     public Binding devNavigatorESBinding() {

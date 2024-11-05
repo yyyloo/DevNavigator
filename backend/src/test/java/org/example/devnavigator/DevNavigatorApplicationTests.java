@@ -34,31 +34,33 @@ import java.util.List;
 
     @Autowired
     RabbitTemplate rabbitTemplate;
-        @Test
-        void contextLoads() {
-            DeveloperEsTo developerEsTo = new DeveloperEsTo();
-            developerEsTo.setId(2L);
-            developerEsTo.setFollowers(79323);
-            developerEsTo.setCountry("中国");
-            developerEsTo.setTalentRank(new BigDecimal(137655));
-            developerEsTo.setLanguages(List.of("CSS", "JavaScript"));
+
+    @Test
+    void contextLoads() {
+        DeveloperEsTo developerEsTo = new DeveloperEsTo();
+        developerEsTo.setId(2L);
+        developerEsTo.setFollowers(79323);
+        developerEsTo.setCountry("中国");
+        developerEsTo.setTalentRank(new BigDecimal(137655));
+        developerEsTo.setLanguages(List.of("CSS", "JavaScript"));
 //            rabbitTemplate.convertAndSend("post-es", developerEsTo);
-            rabbitTemplate.convertAndSend("dev_navigator-exchange","es.key",developerEsTo);
+        rabbitTemplate.convertAndSend("dev_navigator-exchange", "es.key", developerEsTo);
 
-        }
+    }
 
-        @Test
-        void testAdd() {
-            DeveloperEsTo developerEsTo = new DeveloperEsTo();
-            developerEsTo.setId(1L);
-            developerEsTo.setFollowers(79322);
-            developerEsTo.setCountry("中国");
-            developerEsTo.setTalentRank(new BigDecimal(137655));
-            developerEsTo.setLanguages(List.of("CSS", "JavaScript"));
+    @Test
+    void testAdd() {
+        DeveloperEsTo developerEsTo = new DeveloperEsTo();
+        developerEsTo.setId(1L);
+        developerEsTo.setFollowers(79322);
+        developerEsTo.setCountry("中国");
+        developerEsTo.setTalentRank(new BigDecimal(137655));
+        developerEsTo.setLanguages(List.of("CSS", "JavaScript"));
 
-            postEsDao.save(developerEsTo);
-            System.out.println(developerEsTo);
-        }
+        postEsDao.save(developerEsTo);
+        System.out.println(developerEsTo);
+    }
+
     @Test
     void testSearch() throws IOException {
         List<Query> queries = new ArrayList<>();
@@ -97,4 +99,10 @@ import java.util.List;
         System.out.println("Search results: " + results);
     }
 
+    @Test
+    void testPredictCountry() {
+        rabbitTemplate.convertAndSend("dev_navigator-exchange", "predict.country.key", 44L);
+
     }
+
+}

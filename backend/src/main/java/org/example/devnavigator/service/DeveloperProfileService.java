@@ -16,4 +16,6 @@ public interface DeveloperProfileService extends IService<DeveloperProfileEntity
     List<String> allCountrys();
 
     List<GithubUserInfo> search(String country, String domain, String queryContent);
+
+    List<GithubUserInfo> topRank();
 }

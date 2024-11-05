@@ -25,5 +25,13 @@ public class GenerateDataController {
         gitHubApi.generatebyUser(username);
     }
 
+    @GetMapping("/batch")
+    void generateBatch(){
+        gitHubApi.generateBatch();
+    }
+
+
+
+
 
 }

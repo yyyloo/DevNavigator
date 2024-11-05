@@ -10,15 +10,18 @@ import co.elastic.clients.elasticsearch._types.query_dsl.TermQuery;
 import co.elastic.clients.elasticsearch.core.SearchRequest;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 
 
 import org.example.devnavigator.entity.DeveloperProfileEntity;
 
+import org.example.devnavigator.entity.DomainEntity;
 import org.example.devnavigator.mapper.DeveloperProfileMapper;
 
 import org.example.devnavigator.service.DeveloperProfileService;
 
+import org.example.devnavigator.service.DomainService;
 import org.example.devnavigator.to.DeveloperEsTo;
 import org.example.devnavigator.vo.GithubUserInfo;
 import org.example.devnavigator.vo.QuerryRequest;
@@ -26,6 +29,7 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -44,6 +48,8 @@ public class DeveloperProfileServiceImpl extends ServiceImpl<DeveloperProfileMap
     StringRedisTemplate stringRedisTemplate;
     @Autowired
     ElasticsearchClient elasticsearchClient;
+    @Autowired
+    DomainService domainService;
 
     @Override
     public List<DeveloperEsTo> searchFromES(QuerryRequest querryRequest) {
@@ -109,5 +115,26 @@ public class DeveloperProfileServiceImpl extends ServiceImpl<DeveloperProfileMap
 
         return githubUserInfos;
 
+    }
+
+    @Override
+    public List<GithubUserInfo> topRank() {
+
+
+        List<GithubUserInfo> githubUserInfos = new ArrayList<>();
+        //获取前20的数据库主键Id reverseRangeWithScores
+        Set<ZSetOperations.TypedTuple<String>> typedTuples = stringRedisTemplate.opsForZSet().reverseRangeWithScores(DEVELOPER_PREFIX + "rank", 0, 20);
+        List<Long> collect = typedTuples.stream().map(item-> Long.parseLong(item.getValue())).collect(Collectors.toList());
+//        List<Long> collect = range.stream().mapToLong(id->Long.parseLong(id)).boxed().collect(Collectors.toList());
+        List<DeveloperProfileEntity> developerProfileEntities = this.getBaseMapper().selectBatchIds(collect);
+        developerProfileEntities.forEach(developerProfileEntity -> {
+            GithubUserInfo githubUserInfo = new GithubUserInfo();
+            BeanUtils.copyProperties(developerProfileEntity, githubUserInfo);
+            List<DomainEntity> list = domainService.list(new LambdaQueryWrapper<DomainEntity>().eq(DomainEntity::getGithubUsername, developerProfileEntity.getGithubUsername()));
+            List<String> languages = list.stream().map(DomainEntity::getLanguage).collect(Collectors.toList());
+            githubUserInfo.setLanguages(languages);
+            githubUserInfos.add(githubUserInfo);
+        });
+        return githubUserInfos;
     }
 }

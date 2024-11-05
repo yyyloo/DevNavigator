@@ -14,6 +14,7 @@ import org.example.devnavigator.mapper.DomainMapper;
 import org.example.devnavigator.mapper.ProjectContributionsMapper;
 import org.example.devnavigator.service.DomainService;
 import org.example.devnavigator.service.ProjectsService;
+import org.example.devnavigator.utils.HttpUtils;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -28,10 +29,7 @@ import com.alibaba.fastjson.JSONObject;
 import org.springframework.http.ResponseEntity;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -57,34 +55,28 @@ public class GitHubApi {
 
     @Autowired
     StringRedisTemplate stringRedisTemplate;
+    @Autowired
+    HttpUtils httpUtils;
+
 
 
     public void generatebyUser(String username) throws ExecutionException, InterruptedException {
         ExecutorService executorService = Executors.newVirtualThreadPerTaskExecutor();
         CompletableFuture<Integer> f1 = CompletableFuture.supplyAsync(() -> getTotalCommit(username), executorService);
 
-        CompletableFuture<List<ProjectsEntity>> f2 = CompletableFuture.supplyAsync(() -> writeProj(username));
+        CompletableFuture<List<ProjectsEntity>> f2 = CompletableFuture.supplyAsync(() -> writeProj(username),executorService);
 
         CompletableFuture<Void> f3 = CompletableFuture.runAsync(() -> {
             writeDomain(username);
-        });
+        },executorService);
 
-
-        RestTemplate restTemplate = new RestTemplate();
-        String token="";
-        // 设置请求头并添加 token
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("Authorization", "Bearer " + token);  // 使用 Bearer 令牌
-        // 创建带有请求头的 HttpEntity
-        HttpEntity<String> entity = new HttpEntity<>(headers);
 
         DeveloperProfileEntity developerProfileEntity = new DeveloperProfileEntity();
         developerProfileEntity.setGithubUsername(username);
         String userUrl ="https://api.github.com/users/"+username;
         // 发出带有 token 的 GET 请求
-        ResponseEntity<String> response = restTemplate.exchange(userUrl, HttpMethod.GET, entity, String.class);
 
-        String jsonResponse = response.getBody();
+        String jsonResponse = httpUtils.httpGet(userUrl);
         JSONObject jsonObject = JSON.parseObject(jsonResponse);
         // 获取 items 数组
         developerProfileEntity.setBlogUrl(jsonObject.getString("blog"));
@@ -94,10 +86,14 @@ public class GitHubApi {
         developerProfileEntity.setRepoCount(jsonObject.getInteger("public_repos"));
 
         String location = jsonObject.getString("location");
+
+        boolean hasCountry=true;
+
         if(!StringUtil.isNullOrEmpty(location)){
                         String countryUrl ="http://localhost:8000/get_country?location="+location;
                         try {
-                            location = restTemplate.getForObject(countryUrl, String.class);
+                            location= httpUtils.httpGet(countryUrl);
+//                            location = restTemplate.getForObject(countryUrl, String.class);
                             JSONObject countryObj = JSON.parseObject(location);
                             location=countryObj.getString("country");
                             developerProfileEntity.setCountry(location);
@@ -109,6 +105,7 @@ public class GitHubApi {
 
         }else {
             //TODO 社交网络推测
+            hasCountry=false;
         }
 
         CompletableFuture.allOf(f1, f2,f3).join();
@@ -121,7 +118,14 @@ public class GitHubApi {
         score+=score*0.4+developerProfileEntity.getFollowers()*0.4+developerProfileEntity.getCommitCount()*0.1+developerProfileEntity.getRepoCount()*0.1;
         developerProfileEntity.setTalentRank(BigDecimal.valueOf(score));
         developerProfileMapper.insert(developerProfileEntity);
+
+        //TODO 分数存入redis 适合获取排行榜 如果是spark异步计算  这一步应该后置
+        stringRedisTemplate.opsForZSet().add(DEVELOPER_PREFIX+"rank",developerProfileEntity.getId().toString(),developerProfileEntity.getTalentRank().doubleValue());
         rabbitTemplate.convertAndSend("dev_navigator-exchange","es.key",developerProfileEntity);
+        if(hasCountry==false){
+            rabbitTemplate.convertAndSend("dev_navigator-exchange","predict.country.key",developerProfileEntity.getId());
+
+        }
 
         //还差 最大stars  总提交次数 country  rank
 
@@ -153,18 +157,11 @@ public class GitHubApi {
             variables.put("username", username);
             requestBody.set("variables", variables);
 
-            RestTemplate restTemplate = new RestTemplate();
-            String token="";
-            // 设置请求头并添加 token
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("Authorization", "Bearer " + token);
-            // 3. 构建请求并发送
-            HttpEntity<String> entity = new HttpEntity<>(requestBody.toString(), headers);
 
-            ResponseEntity<String> response = restTemplate.exchange("https://api.github.com/graphql", HttpMethod.POST, entity, String.class);
+            String resp = httpUtils.httpPost("https://api.github.com/graphql", requestBody.toString());
 
             // 4. 解析响应 JSON
-            JsonNode jsonResponse = mapper.readTree(response.getBody());
+            JsonNode jsonResponse = mapper.readTree(resp);
             int totalContributions = jsonResponse
                     .path("data")
                     .path("user")
@@ -199,12 +196,6 @@ public class GitHubApi {
                 }
                 """;
 
-            RestTemplate restTemplate = new RestTemplate();
-            String token="";
-
-            // 设置请求头并添加 token
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("Authorization", "Bearer " + token);  // 使用 Bearer 令牌
 
             ObjectMapper mapper = new ObjectMapper();
             ObjectNode requestBody = mapper.createObjectNode();
@@ -215,13 +206,11 @@ public class GitHubApi {
             requestBody.set("variables", variables);
 
 
-            // 3. 构建请求并发送
-            HttpEntity<String> entity = new HttpEntity<>(requestBody.toString(), headers);
+            String resp = httpUtils.httpPost("https://api.github.com/graphql", requestBody.toString());
 
-            ResponseEntity<String> response = restTemplate.exchange("https://api.github.com/graphql", HttpMethod.POST, entity, String.class);
 
             // 4. 解析响应 JSON
-            JsonNode jsonResponse2 = mapper.readTree(response.getBody());
+            JsonNode jsonResponse2 = mapper.readTree(resp);
             JsonNode repositories = jsonResponse2
                     .path("data")
                     .path("user")
@@ -242,11 +231,8 @@ public class GitHubApi {
                 //TODO 分为三个子任务  请求三个仓库的提交信息
 
                 String contributionsUrl ="https://api.github.com/repos/"+ projectsEntity.getOwnerName()+"/"+ projectsEntity.getProjectName()+"/contributors";
-                HttpEntity<String> entity1 = new HttpEntity<>( headers);
-                // 发出带有 token 的 GET 请求
-                ResponseEntity<String> resp = restTemplate.exchange(contributionsUrl, HttpMethod.GET, entity1, String.class);
 
-                String jsonResp = resp.getBody();
+                String jsonResp = httpUtils.httpGet(contributionsUrl);
                 JSONArray jsonArray = JSON.parseArray(jsonResp);
 
                 int totalContributions = jsonArray.stream()
@@ -294,13 +280,6 @@ public class GitHubApi {
                 }
                 """;
 
-        RestTemplate restTemplate = new RestTemplate();
-
-        String token="";
-
-        // 设置请求头并添加 token
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("Authorization", "Bearer " + token);  // 使用 Bearer 令牌
 
 
         JSONObject variables = new JSONObject();
@@ -311,10 +290,9 @@ public class GitHubApi {
         requestBody.put("variables", variables);
 
 
-        HttpEntity<String> entity = new HttpEntity<>(requestBody.toString(), headers);
-        ResponseEntity<String> response = restTemplate.exchange("https://api.github.com/graphql", HttpMethod.POST, entity, String.class);
+        String resp = httpUtils.httpPost("https://api.github.com/graphql", requestBody.toString());
 
-        JSONObject jsonResponse = JSON.parseObject(response.getBody());
+        JSONObject jsonResponse = JSON.parseObject(resp);
         JSONArray repositories = jsonResponse.getJSONObject("data")
                 .getJSONObject("user")
                 .getJSONObject("repositories")
@@ -356,4 +334,51 @@ public class GitHubApi {
     }
 
 
+    public void generateBatch() {
+        String countryUserUrl1="https://api.github.com/search/users?q=location:China&sort=followers&order=desc&per_page=10&page=1";
+        String countryUserUrl2="https://api.github.com/search/users?q=location:United-States&sort=followers&order=desc&per_page=10&page=1";
+        String countryUserUrl3="https://api.github.com/search/users?q=location:Japan&sort=followers&order=desc&per_page=10&page=1";
+        String countryUserUrl4="https://api.github.com/search/users?q=location:France&sort=followers&order=desc&per_page=10&page=1";
+        String countryUserUrl5="https://api.github.com/search/users?q=location:United-Kingdom&sort=followers&order=desc&per_page=10&page=1";
+        String repositorieUrl ="https://api.github.com/search/repositories?q=stars:<2000&sort=stars&order=desc&per_page=1";
+        List<String> urls = new ArrayList<>();
+        urls.add(countryUserUrl1);
+        urls.add(countryUserUrl2);
+        urls.add(countryUserUrl3);
+        urls.add(countryUserUrl4);
+        urls.add(countryUserUrl5);
+        urls.forEach(url->{
+            Thread virtualThread = Thread.ofVirtual().start(() -> {
+                // 虚拟线程执行的任务
+                String jsonResponse  = httpUtils.httpGet(url);
+                JSONObject jsonObject = JSON.parseObject(jsonResponse);
+
+
+                // 获取 items 数组
+                JSONArray itemsArray = jsonObject.getJSONArray("items");
+                List<ProjectsEntity> projectsEntityList = new ArrayList<>();
+//        List<String> languageUrl=new ArrayList<>();
+
+                // 遍历 items 数组，获取所需的字段
+                for (int i = 0; i < itemsArray.size(); i++) {
+                    String username = itemsArray.getJSONObject(i).getString("login");
+                    Thread.ofVirtual().start(()->{
+                        try {
+                            generatebyUser(username);
+                        } catch (ExecutionException e) {
+                            throw new RuntimeException(e);
+                        } catch (InterruptedException e) {
+                            throw new RuntimeException(e);
+                        }
+                    });
+
+                }
+
+            });
+        });
+
+
+
+
+    }
 }

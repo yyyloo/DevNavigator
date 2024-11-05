@@ -36,8 +36,14 @@ public class DeveloperController {
 
     @PostMapping("/search")
     public R search(@RequestBody QuerryRequest querryRequest) {
-        List<GithubUserInfo> languages= developerProfileService.search(querryRequest.getCountry(),querryRequest.getLanguages(),querryRequest.getGithubUsername());
-        return R.ok().setData(languages);
+        List<GithubUserInfo> userInfos= developerProfileService.search(querryRequest.getCountry(),querryRequest.getLanguages(),querryRequest.getGithubUsername());
+        return R.ok().setData(userInfos);
+    }
+
+    @GetMapping("/top")
+    public R topRank() {
+        List<GithubUserInfo> userInfos= developerProfileService.topRank();
+        return R.ok().setData(userInfos);
     }
 
     @GetMapping("/test")
